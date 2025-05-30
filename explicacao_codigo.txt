@@ -1,0 +1,46 @@
+OBJETIVO DO CÓDIGO
+
+Este código resolve um problema de melhoramento genético animal: determinar quais fêmeas devem cruzar com quais machos para gerar uma nova geração com o menor grau possível de coancestralidade.
+
+O QUE O CÓDIGO FAZ
+
+- Lê um arquivo CSV.
+- Constrói uma matriz que representa a coancestralidade entre todos os cruzamentos possíveis.
+- Gera uma solução inicial: cada fêmea é atribuída a um macho, respeitando um limite máximo de uso por macho.
+- Usa BUSCA TABU para encontrar uma melhor combinação de cruzamentos:
+  - Gera vizinhos (trocas simples e duplas de machos entre fêmeas).
+  - Avalia o custo (grau de coancestralidade total).
+  - Evita voltar a soluções anteriores usando uma lista tabu.
+- Ao final, exibe a melhor solução encontrada e o seu custo.
+
+ COMO FUNCIONA
+
+1. MATRIZ C:
+   - É de tamanho (NF × NM) × (NF × NM)
+   - Cada entrada representa a coancestralidade entre dois cruzamentos.
+
+2. SOLUÇÃO P:
+   - Um vetor onde P[i] = índice do macho atribuído à fêmea i
+
+3. AVALIAÇÃO:
+   - Soma da coancestralidade entre todos os filhos que seriam gerados com a solução atual.
+
+4. BUSCA TABU:
+   - Explora o espaço de soluções mantendo uma lista de soluções proibidas.
+   - Substitui cruzamentos por outros melhores, evitando repetições.
+
+ SAÍDA FINAL
+
+- Lista de cruzamentos fêmea × macho
+- Custo total de coancestralidade: quanto menor, melhor a diversidade genética da nova geração
+
+Exemplo:
+Fêmea F01 × Macho M02
+Fêmea F02 × Macho M03
+.
+.
+.
+Custo total de coancestralidade: 1.687500
+ CONCLUSÃO
+
+Este código ajuda a tomar decisões inteligentes em programas de melhoramento animal, garantindo que a nova geração seja saudável, diversa e com menor risco genético.
