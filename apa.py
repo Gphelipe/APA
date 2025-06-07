@@ -31,21 +31,20 @@ def carregar_matriz_C(caminho_csv):
             j = par_para_indice[a2]
             C[i, j] = coef
             C[j, i] = coef  # Simetria da matriz
+            
 
-    # Adiciona um ruído pequeno para evitar zeros na matriz e melhorar a busca 
-    C += np.random.uniform(0, 0.001, size=C.shape)
-
+    # Adiciona um ruído pequeno para evitar zeros na matriz e melhorar a busca
+    np.fill_diagonal(C, 1)
+    print(C)
     return C, femeas, machos, par_para_indice
 
 
 def avaliar(P, C, NF, NM):
-    #Calcula o custo total de coancestralidade de uma solução P (lista de machos atribuídos a cada fêmea),
-        # somando C[idx1, idx2] para todos os pares de cruzamentos.
     custo = 0.0
-    for i in range(NF):      #vai percorer todas combinações das femeas e acumular os coeficientes entre os decendentes 
-        for j in range(NF):
-            idx1 = i * NM + P[i]    # Índice do cruzamento da fêmea i com macho P[i]
-            idx2 = j * NM + P[j]    # Índice do cruzamento da fêmea j com macho P[j]
+    for i in range(NF): #vai percorer todas combinações das femeas e acumular os coeficientes entre os decendentes 
+        for j in range(i + 1, NF):  # Evita pares duplicados e i == j
+            idx1 = i * NM + P[i]  # Índice do cruzamento da fêmea i com macho P[i]
+            idx2 = j * NM + P[j]  # Índice do cruzamento da fêmea j com macho P[j]
             custo += C[idx1, idx2]  # Soma dos coeficientes entre os cruzamentos
     return custo
 
@@ -78,7 +77,7 @@ def gerar_vizinhos(P, NM, max_uso):
 def solucao_inicial(NF, NM, max_uso):
     #Cria uma solução inicial válida, distribuindo os machos entre as fêmeas, respeitando max_uso.
 
-    P = []                  #Prepara os machos embaralhados e uma contagem de uso para distribuir equitativamente.
+    P = []     #Prepara os machos embaralhados e uma contagem de uso para distribuir equitativamente.
     machos_disponiveis = list(range(NM))
     random.shuffle(machos_disponiveis)
     
