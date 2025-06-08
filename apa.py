@@ -2,161 +2,195 @@ import numpy as np
 import random
 from collections import deque, Counter
 import pandas as pd
+import time
+import matplotlib.pyplot as plt
 
 def carregar_matriz_C(caminho_csv):
-    df = pd.read_csv(caminho_csv)  # Carrega o arquivo CSV
-
-    # Extrair todos os pares únicos de animais cruzados
+    """
+    Carrega a matriz de coancestralidade a partir de um arquivo CSV.
+    """
+    df = pd.read_csv(caminho_csv)
     todos_pares = list(set(df['Animal_1']).union(set(df['Animal_2'])))
-
-    # extração de machos e femeas
-    machos = sorted({p.split('_')[0] for p in todos_pares})   
-    femeas = sorted({p.split('_')[1] for p in todos_pares})   
-
-    NF = len(femeas)  # Número de fêmeas
-    NM = len(machos)  # Número de machos
-
-    tamanho = NF * NM   # Total de possíveis cruzamentos
-    C = np.zeros((tamanho, tamanho))  # Inicializa a matriz de coancestralidade
-
-    # mapeamento: macho_femea → índice
+    machos = sorted({p.split('_')[0] for p in todos_pares})
+    femeas = sorted({p.split('_')[1] for p in todos_pares})
+    NF = len(femeas)
+    NM = len(machos)
+    tamanho = NF * NM
+    C = np.zeros((tamanho, tamanho))
     par_para_indice = {f"{m}_{f}": i for i, (f, m) in enumerate([(f, m) for f in femeas for m in machos])}
 
-    # Preenche a matriz de coancestralidade
     for _, linha in df.iterrows():
         a1, a2, coef = linha['Animal_1'], linha['Animal_2'], linha['Coef']
-
         if a1 in par_para_indice and a2 in par_para_indice:
             i = par_para_indice[a1]
             j = par_para_indice[a2]
             C[i, j] = coef
-            C[j, i] = coef  # Simetria da matriz
-            
+            C[j, i] = coef
 
-    # Adiciona um ruído pequeno para evitar zeros na matriz e melhorar a busca
-    np.fill_diagonal(C, 1)
-    print(C)
+    np.fill_diagonal(C, 1) # Garante que a diagonal principal seja 1
     return C, femeas, machos, par_para_indice
 
-
 def avaliar(P, C, NF, NM):
+    """
+    Calcula o custo de uma solução (soma da coancestralidade).
+    """
     custo = 0.0
-    for i in range(NF): #vai percorer todas combinações das femeas e acumular os coeficientes entre os decendentes 
-        for j in range(i + 1, NF):  # Evita pares duplicados e i == j
-            idx1 = i * NM + P[i]  # Índice do cruzamento da fêmea i com macho P[i]
-            idx2 = j * NM + P[j]  # Índice do cruzamento da fêmea j com macho P[j]
-            custo += C[idx1, idx2]  # Soma dos coeficientes entre os cruzamentos
+    for i in range(NF):
+        for j in range(i + 1, NF):
+            idx1 = i * NM + P[i]
+            idx2 = j * NM + P[j]
+            custo += C[idx1, idx2]
     return custo
 
 def gerar_vizinhos(P, NM, max_uso):
-    #Trocas simples: mudar um macho por outro.
-    #Trocas duplas: trocar os machos atribuídos entre duas fêmeas.
-    
+    """
+    Gera soluções vizinhas através de trocas simples e duplas.
+    """
     vizinhos = []
     NF = len(P)
-    uso = Counter(P)     # Conta quantas vezes cada macho está sendo usado
-    
-    # Vizinhos por troca simples (Gera novas soluções substituindo o macho de uma fêmea por outro macho que ainda não atingiu o limite de uso)
+    uso = Counter(P)
+    # Troca simples
     for i in range(NF):
         for m in range(NM):
-            if m != P[i] and uso[m] < max_uso[m]:
+            # Usamos .get() para o caso de um macho não estar no dicionário max_uso
+            if m != P[i] and uso[m] < max_uso.get(m, float('inf')):
                 nova = P.copy()
                 nova[i] = m
                 vizinhos.append(nova)
-    
-    # Vizinhos vizinhos trocando os machos entre duas fêmeas diferentes.
+    # Troca dupla
     for i in range(NF):
-        for j in range(i+1, NF):
+        for j in range(i + 1, NF):
             if P[i] != P[j]:
                 nova = P.copy()
                 nova[i], nova[j] = nova[j], nova[i]
                 vizinhos.append(nova)
-    
     return vizinhos
 
 def solucao_inicial(NF, NM, max_uso):
-    #Cria uma solução inicial válida, distribuindo os machos entre as fêmeas, respeitando max_uso.
-
-    P = []     #Prepara os machos embaralhados e uma contagem de uso para distribuir equitativamente.
+    """
+    Cria uma solução inicial válida que respeita as restrições de uso.
+    """
+    P = [-1] * NF
     machos_disponiveis = list(range(NM))
     random.shuffle(machos_disponiveis)
-    
-    # Distribui os machos para cada fêmea respeitando o limite de uso
     contagem = Counter()
-    for _ in range(NF):
+
+    for i in range(NF):
+        macho_encontrado = False
+        # Tenta atribuir um macho que não exceda o limite
         for m in machos_disponiveis:
-            if contagem[m] < max_uso[m]:
-                P.append(m)
+            if contagem[m] < max_uso.get(m, float('inf')):
+                P[i] = m
                 contagem[m] += 1
+                macho_encontrado = True
                 break
-        else:
-            # Se não encontrou, pega qualquer macho disponível
-            P.append(random.choice(machos_disponiveis))
-    
+        # Se todos os machos atingiram o limite, atribui um aleatório (fallback)
+        if not macho_encontrado:
+             P[i] = random.choice(machos_disponiveis)
     return P
 
-def busca_tabu(C, NF, NM, max_uso, iter_max=1000, tabu_tam=20):
-    #Mantém uma lista tabu de soluções recentes.
-    #Gera vizinhos e escolhe o melhor que não está na tabu.
-    #Atualiza a melhor solução global.
-    #Exibe progresso a cada 100 iterações.
-
-    P = solucao_inicial(NF, NM, max_uso)  #Gera uma solução inicial viável e avalia seu custo.
+def busca_tabu(C, NF, NM, max_uso, iter_max, tabu_tam, limite_sem_melhora=300):
+    """
+    Executa o algoritmo de Busca Tabu com Critério de Aspiração e Diversificação.
+    """
+    P = solucao_inicial(NF, NM, max_uso)
     melhor_P = P.copy()
-    melhor_custo = avaliar(P, C, NF, NM)
-    
-    lista_tabu = deque(maxlen=tabu_tam)     # Inicia a lista tabu com a solução atual.
-    lista_tabu.append(tuple(P))
-    
-    for it in range(iter_max):                      #cada iteração, gera e embaralha os vizinhos da solução atual.
-        vizinhos = gerar_vizinhos(P, NM, max_uso)
-        random.shuffle(vizinhos)  # Explorar mais diversidade
-        
-        melhor_vizinho = None                           #Seleciona o vizinho de menor custo que não esteja na lista tabu.
-        melhor_custo_vizinho = float('inf')
-        
-        for vizinho in vizinhos:
-            if tuple(vizinho) not in lista_tabu:
-                custo = avaliar(vizinho, C, NF, NM)
-                if custo < melhor_custo_vizinho:
-                    melhor_vizinho = vizinho
-                    melhor_custo_vizinho = custo
-        
-        if melhor_vizinho is None:
-            break  # Encerra se nenhum vizinho novo foi encontrado
+    custo_atual = avaliar(P, C, NF, NM)
+    melhor_custo = custo_atual
 
-           # Atualiza a solução atual e, se for melhor que a anterior, atualiza o melhor global.  
+    lista_tabu = deque(maxlen=tabu_tam)
+    lista_tabu.append(tuple(P))
+
+    custo_historico = [melhor_custo]
+    iter_sem_melhora = 0
+
+    for it in range(iter_max):
+        vizinhos = gerar_vizinhos(P, NM, max_uso)
+        random.shuffle(vizinhos)
+
+        melhor_vizinho = None
+        melhor_custo_vizinho = float('inf')
+
+        for vizinho in vizinhos:
+            custo_v = avaliar(vizinho, C, NF, NM)
+            
+            if (tuple(vizinho) not in lista_tabu) or (custo_v < melhor_custo):
+                if custo_v < melhor_custo_vizinho:
+                    melhor_vizinho = vizinho
+                    melhor_custo_vizinho = custo_v
+
+        if melhor_vizinho is None:
+            print(f"[{it}] Não foram encontrados vizinhos válidos. Encerrando.")
+            break
+
         P = melhor_vizinho
+        custo_atual = melhor_custo_vizinho
         lista_tabu.append(tuple(P))
-        
-        if melhor_custo_vizinho < melhor_custo:
+
+        if custo_atual < melhor_custo:
             melhor_P = P.copy()
-            melhor_custo = melhor_custo_vizinho
-        
+            melhor_custo = custo_atual
+            iter_sem_melhora = 0
+        else:
+            iter_sem_melhora += 1
+
+        custo_historico.append(melhor_custo)
+
         if it % 100 == 0:
-            print(f"[{it}] Custo atual: {melhor_custo_vizinho:.4f} | Melhor: {melhor_custo:.4f}")
-    
-    return melhor_P, melhor_custo
+            print(f"[{it}] Custo atual: {custo_atual:.4f} | Melhor global: {melhor_custo:.4f}")
+
+        if iter_sem_melhora >= limite_sem_melhora:
+            print(f"[{it}] ESTAGNAÇÃO! Resetando a solução para diversificar a busca.")
+            P = solucao_inicial(NF, NM, max_uso)
+            iter_sem_melhora = 0
+            lista_tabu.clear()
+            lista_tabu.append(tuple(P))
+
+    return melhor_P, melhor_custo, custo_historico
 
 if __name__ == "__main__":
-    caminho_csv = "parentesco_produtos.csv"
-    C, femeas, machos, par_para_indice = carregar_matriz_C(caminho_csv)
-    NF = len(femeas)
-    NM = len(machos)
+    try:
+        inicio = time.time()
+        
+        caminho_csv = "parentesco_produtos.csv"
+        C, femeas, machos, par_para_indice = carregar_matriz_C(caminho_csv)
+        NF = len(femeas)
+        NM = len(machos)
 
-    print(f"Número de fêmeas: {NF}, Número de machos: {NM}")
-    print(f"Dimensão da matriz C: {C.shape}")
-    print(f"Valores não-zero na matriz C: {np.count_nonzero(C)}")
+        print(f"Número de fêmeas: {NF}, Número de machos: {NM}")
+        
+        max_uso = {i: 12 for i in range(NM)}
 
-    # Ajuste o número máximo de usos por macho conforme necessário
-    max_uso = {i: 2 for i in range(NM)}  # Cada macho pode ser usado até 2 vezes
+        solucao, custo, historico = busca_tabu(
+            C, NF, NM, max_uso, 
+            iter_max=2000, 
+            tabu_tam=30, 
+            limite_sem_melhora=400
+        )
 
-    # Executar a busca tabu
-    solucao, custo = busca_tabu(C, NF, NM, max_uso, iter_max=1000)
+        fim = time.time()
+        
+        print("\nCruzamentos finais:")
+        for i, macho_idx in enumerate(solucao):
+            print(f" {machos[macho_idx]} × {femeas[i]}")
 
-    # Exibir resultados
-    print("\nCruzamentos finais:")
-    for i, macho_idx in enumerate(solucao):
-        print(f" {machos[macho_idx]} × {femeas[i]}")
+        print(f"\nCusto total de coancestralidade: {custo:.4f}")
+        print(f"Tempo de execução: {fim - inicio:.2f} segundos")
 
-    print(f"\nCusto total de coancestralidade: {custo:.4f}")
+        # --- ALTERAÇÃO AQUI ---
+        # Salvar o gráfico em um arquivo PNG em vez de exibi-lo
+        nome_arquivo_grafico = 'grafico_convergencia_coancestralidade.png'
+        plt.figure(figsize=(12, 6))
+        plt.plot(historico)
+        plt.title('Convergência do Custo da Busca Tabu')
+        plt.xlabel('Iteração')
+        plt.ylabel('Melhor Custo de Coancestralidade')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(nome_arquivo_grafico, dpi=300) # dpi=300 para alta resolução
+        
+        print(f"\nGráfico de convergência salvo como '{nome_arquivo_grafico}'")
+
+    except FileNotFoundError:
+        print("\nERRO: O arquivo 'parentesco_produtos.csv' não foi encontrado.")
+        print("Por favor, carregue o arquivo e execute o script novamente.")
