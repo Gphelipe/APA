@@ -84,9 +84,10 @@ def solucao_inicial(NF, NM, max_uso):
                 contagem[m] += 1
                 macho_encontrado = True
                 break
-        # Se todos os machos atingiram o limite, atribui um aleatório (fallback)
+        # Se todos os machos atingiram o limite, atribui um aleatório
         if not macho_encontrado:
              P[i] = random.choice(machos_disponiveis)
+             print(f"Aviso: macho {m} excedeu o limite de uso na solução inicial.")
     return P
 
 def busca_tabu(C, NF, NM, max_uso, iter_max, tabu_tam, limite_sem_melhora=300):
