@@ -114,11 +114,17 @@ def busca_tabu(C, NF, NM, max_uso, iter_max, tabu_tam, limite_sem_melhora=300):
         for vizinho in vizinhos:
             custo_v = avaliar(vizinho, C, NF, NM)
             
-            if (tuple(vizinho) not in lista_tabu) or (custo_v < melhor_custo):
+            eh_tabu = tuple(vizinho) in lista_tabu
+            eh_aspiracao = custo_v < melhor_custo
+          
+            if not eh_tabu or eh_aspiracao:
                 if custo_v < melhor_custo_vizinho:
                     melhor_vizinho = vizinho
                     melhor_custo_vizinho = custo_v
+            if eh_tabu and eh_aspiracao:
+             print(f"[{it}] Solução tabu aceita por aspiração! Custo: {custo_v:.4f}")
 
+     
         if melhor_vizinho is None:
             print(f"[{it}] Não foram encontrados vizinhos válidos. Encerrando.")
             break
@@ -163,7 +169,7 @@ if __name__ == "__main__":
 
         solucao, custo, historico = busca_tabu(
             C, NF, NM, max_uso, 
-            iter_max=2000, 
+            iter_max=5000, 
             tabu_tam=30, 
             limite_sem_melhora=400
         )
@@ -188,7 +194,7 @@ if __name__ == "__main__":
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(nome_arquivo_grafico, dpi=300) # dpi=300 para alta resolução
-        
+            
         print(f"\nGráfico de convergência salvo como '{nome_arquivo_grafico}'")
 
     except FileNotFoundError:
