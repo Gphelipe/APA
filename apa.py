@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 def carregar_matriz_C(caminho_csv):
     """
     Carrega a matriz de coancestralidade a partir de um arquivo CSV.
-    """
+    """ 
     df = pd.read_csv(caminho_csv)
     todos_pares = list(set(df['Animal_1']).union(set(df['Animal_2'])))
     machos = sorted({p.split('_')[0] for p in todos_pares})
@@ -32,15 +32,18 @@ def carregar_matriz_C(caminho_csv):
 
 def avaliar(P, C, NF, NM):
     """
-    Calcula o custo de uma solução (soma da coancestralidade).
+    Calcula o custo de uma solução (média da coancestralidade).
     """
-    custo = 0.0
+    soma = 0.0
+    total = 0
     for i in range(NF):
         for j in range(i + 1, NF):
             idx1 = i * NM + P[i]
             idx2 = j * NM + P[j]
-            custo += C[idx1, idx2]
-    return custo
+            soma += C[idx1, idx2]
+            total += 1
+    return soma / total if total > 0 else float('inf')
+
 
 def gerar_vizinhos(P, NM, max_uso):
     """
